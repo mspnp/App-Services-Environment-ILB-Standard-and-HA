@@ -2,109 +2,116 @@
 
 ## Prerequisites
 
-- [azure-cli](https://docs.microsoft.com/bs-cyrl-ba/cli/azure/install-azure-cli?view=azure-cli-latest) 2.2.0 or older.
+- [azure-cli](https://docs.microsoft.com/bs-cyrl-ba/cli/azure/install-azure-cli?view=azure-cli-latest)
+  2.2.0 or newer.
+- [sqlcmd](https://docs.microsoft.com/en-us/sql/linux/sql-server-linux-setup-tools?view=sql-server-ver15)
+  installed.
+- **openssl** tool installed for your platform: `sudo apt-get install openssl`
+  or `brew install openssl`
+- **jq** tool installed for your platform: `sudo apt-get install jq` or
+  `brew install jq`
+- **dig** tool installed for your platform: `sudo apt install dnsutils` or
+  `brew install bind`
+- Check that you are able to get the public IP with `dig`:
 
-* [sqlcmd](https://docs.microsoft.com/en-us/sql/linux/sql-server-linux-setup-tools?view=sql-server-ver15) installed.
-
-* **jq** tool installed for your platform:
-  `sudo apt-get install jq`
-
-* **dig** tool for your platform - Check that you are able to get the public IP, and install dig tool:
-  ```
-  sudo apt install dnsutils
+  ```bash
   dig @resolver1.opendns.com ANY myip.opendns.com +short
   ```
 
-## Set up environment variables to run the deployment script
+## Configure AZ CLI
 
-Run the following commands after providing values for the variables.
+First, Login with the `az` CLI with the following command:
 
-**Note:** RGLOCATION should be in the right format. Some examples of valid locations are **westus, eastus, northeurope, westeurope, eastasia, southeastasia, northcentralus, southcentralus, centralus, eastus2, westus2, japaneast, japanwest, brazilsouth**.
+`az login`
 
-```
-export RGNAME=yourResourceGroupName
-export RGLOCATION=yourLocation
-export SQLADMINUSER=yoursqlAdminUser
-export JUMPBOX_USER=yourJumpBoxUser
-export ADMIN_USER_ID=$(az ad signed-in-user show --query objectId -o tsv)
-```
+After you've logged in, you'll want to select the subscription you want to
+deploy this solution into. Get a list of subscriptions with the following
+command:
 
-## Enter and export the password for the SQL Server administrator
+`az account list --output table`
 
-**Note:** For SQL Server administrator password requirements, check [Password Policy](https://docs.microsoft.com/en-us/sql/relational-databases/security/password-policy?view=sql-server-2017).
+You can then set the subscription you'd like to use with the following command:
 
-```
-read -s SQLADMINPASSWORD
-export SQLADMINPASSWORD
-```
+`az account set --subscription "The Subscription Name"`
 
-## Enter and export the password for the jumpbox administrator
+## Run a Deployment Script
 
-```
-read -s JUMPBOX_PASSWORD
-export JUMPBOX_PASSWORD
+Change directory to the `deployment` folder:
+
+```bash
+cd deployment
 ```
 
-## Enter and export the password for the SSL certificate
+Then execute either the `deploy_std.sh` or `deploy_ha.sh` for a standard or
+high-availability deployment, respectively.
 
-```
-read -s PFX_PASSWORD
-export PFX_PASSWORD
-```
+The script will prompt you for various parameters to complete and personalize
+the solution deployment, including resource group name, region, and user names
+and passwords for generated accounts.
 
-## Run the deployment script
+As a note, the region/location should be in the right format. Examples of valid
+resource group locations are:
 
-Move to templates directory.
+- brazilsouth
+- centralus
+- eastasia
+- eastus
+- eastus2
+- japaneast
+- japanwest
+- northcentralus
+- northeurope
+- southcentralus
+- southeastasia
+- westeurope
+- westus
+- westus2
 
-```
-cd templates
-```
+Also, for the SQL Server administrator password, check the
+[Password Policy](https://docs.microsoft.com/en-us/sql/relational-databases/security/password-policy?view=sql-server-2017)
+requirements.
 
-Then follow the steps for either standard or high availability deployments.
+> **NOTE:** if you're having trouble executing the script, you may need to add
+> the execute permission. For example: `chmod +x deploy_std.sh`
 
-### For standard deployment
+## Insert Document in Cosmos DB
 
-```
-chmod +x deploy_std.sh
-./deploy_std.sh
-```
+1. After deployment ends in the last step, run the following commands to get
+   the: resourceURl
 
-### For high availability deployment
+   ```bash
+   echo "{\"id\": \"1\", \"Message\": \"Powered by Azure\", \"MessageType\": \"AD\", \"Url\": \"${RESOURCE_URL}\"}"
+   ```
 
-```
-chmod +x deploy_ha.sh
-./deploy_ha.sh
-```
+   The following snippet shows an example of the JSON response:
 
-## Insert Document in Cosmos Db
+   ```javascript
+   {
+     "id": "1",
+     "Message": "Powered by Azure",
+     "MessageType": "AD",
+     "Url": "https://webappri.blob.core.windows.net/webappri/Microsoft_Azure_logo_small.png"
+   }
+   ```
 
-1. After deployment ends in the last step, run the following commands to get the resourceURl
-
-```
-echo "{\"id\": \"1\", \"Message\": \"Powered by Azure\", \"MessageType\": \"AD\", \"Url\": \"${RESOURCE_URL}\"}"
-```
-
-The following snippet shows an example of the JSON response:
-
-```
-{"id": "1","Message": "Powered by Azure","MessageType": "AD","Url": "https://webappri.blob.core.windows.net/webappri/Microsoft_Azure_logo_small.png"}
-```
-
-2. Open Azure portal, navigate to the resource group of the deployment, and click on **Azure Cosmos Db Account**.
-
-- Select **Firewall and virtual network**, there you can see:  
-  **Add IP ranges to allow access from the internet or your on-premises networks**. 
-  Click on **Add my current ip**, and save it.
-
-- Select **cacheContainer**, then click on **Items**. Click on **New Item**. Replace the whole json payload with above content and click **Save**.
-
-- Go to Azure portal and open the resource group of deployment above. Click on **Azure Cosmos Db Account**, then select **Firewall and virtual network**, then delete your public ip.
+2. Open Azure portal, navigate to the resource group of the deployment, and
+   click on **Azure Cosmos Db Account**.
+   - Select **Firewall and virtual network**, there you can see:  
+     **Add IP ranges to allow access from the internet or your on-premises
+     networks**. Click on **Add my current ip**, and save it.
+   - Select **cacheContainer**, then click on **Items**. Click on **New Item**.
+     Replace the whole json payload with above content and click **Save**.
+   - Go to Azure portal and open the resource group of deployment above. Click
+     on **Azure Cosmos Db Account**, then select **Firewall and virtual
+     network**, then delete your public ip.
 
 ## Register domain by adding a record in hosts file [OPTIONAL]
 
-1. Go to Azure portal, open the the resource group of deployment above, and click on **AppGatewayIp**, then copy the IP Address value.
+1. Go to Azure portal, open the the resource group of deployment above, and
+   click on **AppGatewayIp**, then copy the IP Address value.
 2. Edit local host file.
-3. Add a new record using the IP read in step 1 above with the domain defined in APPGW_URL.
+3. Add a new record using the IP read in step 1 above with the domain defined in
+   APPGW_URL.
 
 ## Set up managed identities as users in the Sql Database
 
@@ -122,5 +129,9 @@ The following snippet shows an example of the JSON response:
 
 _NOTE: Ignore the certificate validation error on the browser._
 
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+This project has adopted the
+[Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+For more information see the
+[Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
+contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any
+additional questions or comments.
